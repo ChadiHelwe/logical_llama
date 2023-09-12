@@ -10,3 +10,4 @@ aima3
 nltk
 penman
 amr-logic-converter
+scipy

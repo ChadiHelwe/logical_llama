@@ -17,3 +17,4 @@ original_adapter.py
 
 env/*
 *.json
+*.pth

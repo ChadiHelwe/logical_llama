@@ -90,7 +90,7 @@ class AmrToFolConverter:
 def generate_instruction_instances(sentence, amr, fol):
     """Generate all instruction instances for the given sentence, AMR and FOL."""
     return [
-        {"instruction": INSTRUCTION_TEXT_TO_FOL, "input":sentence, "output": fol},
+        {"instruction": INSTRUCTION_TEXT_TO_FOL, "input": sentence, "output": fol},
         {"instruction": INSTRUCTION_FOL_TO_TEXT, "input": fol, "output": sentence},
         {"instruction": INSTRUCTION_TEXT_TO_AMR, "input": sentence, "output": amr},
         {"instruction": INSTRUCTION_AMR_TO_TEXT, "input": amr, "output": sentence},
@@ -101,13 +101,17 @@ def generate_instruction_instances(sentence, amr, fol):
 
 if __name__ == "__main__":
     converter = AmrToFolConverter()
-    root_dir = ["datasets/amr_annotation_3.0/data/amrs/split/training", "datasets/amr_annotation_3.0/data/amrs/split/dev"]
+    root_dir = [
+        "datasets/amr_annotation_3.0/data/amrs/split/training",
+        "datasets/amr_annotation_3.0/data/amrs/split/dev",
+    ]
 
     with open("logicmancer_dataset.json", "w") as out:
         out.write("[\n")
+        tmp_data = []
         for s, a, f in converter.process_directory(root_dir):
             dict_instruction_instances = generate_instruction_instances(s, a, f)
             for instruction_instance in dict_instruction_instances:
-                out.write(json.dumps(instruction_instance))
-                out.write(",\n")
-        out.write("]\n")
+                tmp_data.append(json.dumps(instruction_instance))
+        out.write(",\n".join(tmp_data))
+        out.write("]")
