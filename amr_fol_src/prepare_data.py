@@ -21,7 +21,7 @@ def prepare(
     destination_path: Path = Path("datasets"),
     tokenizer_path: Path = Path("models/llama-2-7b/tokenizer.model"),
     test_split_size: int = 31467,
-    max_seq_length: int = 256,
+    max_seq_length: int = 512,
     seed: int = 42,
     mask_inputs: bool = False,  # as in alpaca-lora
     data_file_name: str = DATA_FILE_NAME,
