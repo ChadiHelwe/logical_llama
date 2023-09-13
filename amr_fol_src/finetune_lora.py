@@ -4,10 +4,10 @@ Instruction-tuning with LoRA on the Alpaca dataset.
 Note: If you run into a CUDA error "Expected is_sm80 to be true, but got false", uncomment the line
 `torch.backends.cuda.enable_flash_sdp(False)` in the script below (see https://github.com/Lightning-AI/lit-llama/issues/101).
 """
-import sys
-from pathlib import Path
 import os
+import sys
 import time
+from pathlib import Path
 
 import lightning as L
 import numpy as np
@@ -18,11 +18,10 @@ wd = Path(__file__).parent.parent.resolve()
 sys.path.append(str(wd))
 
 from generate import generate
-from lit_llama.lora import mark_only_lora_as_trainable, lora, lora_state_dict
+from lit_llama.lora import lora, lora_state_dict, mark_only_lora_as_trainable
 from lit_llama.model import LLaMA, LLaMAConfig
 from lit_llama.tokenizer import Tokenizer
 from scripts.prepare_alpaca import generate_prompt
-
 
 instruction_tuning = True
 eval_interval = 100
@@ -46,12 +45,11 @@ warmup_iters = 100
 
 
 def main(
-    data_dir: str = "datasets", 
+    data_dir: str = "datasets",
     pretrained_path: str = "models/llama-2-7b/consolidated-00.pth",
     tokenizer_path: str = "models/llama-2-7b/tokenizer.model",
     out_dir: str = "out/lora/logicmancer",
 ):
-
     fabric = L.Fabric(accelerator="cuda", devices=1, precision="bf16-true")
     fabric.launch()
     fabric.seed_everything(1337 + fabric.global_rank)
@@ -66,11 +64,13 @@ def main(
 
     checkpoint = torch.load(pretrained_path)
 
-    with fabric.init_module(), lora(r=lora_r, alpha=lora_alpha, dropout=lora_dropout, enabled=True):
+    with fabric.init_module(), lora(
+        r=lora_r, alpha=lora_alpha, dropout=lora_dropout, enabled=True
+    ):
         model = LLaMA(config)
         # strict=False because missing keys due to LoRA weights not contained in checkpoint state
         model.load_state_dict(checkpoint, strict=False)
-    
+
     mark_only_lora_as_trainable(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
@@ -98,17 +98,18 @@ def train(
     step_count = 0
 
     for iter_num in range(max_iters):
-
         if step_count <= warmup_iters:
             # linear warmup
             lr = learning_rate * step_count / warmup_iters
             for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+                param_group["lr"] = lr
 
         t0 = time.time()
 
         input_ids, targets = get_batch(fabric, train_data)
-        with fabric.no_backward_sync(model, enabled=((iter_num + 1) % gradient_accumulation_iters != 0)):
+        with fabric.no_backward_sync(
+            model, enabled=((iter_num + 1) % gradient_accumulation_iters != 0)
+        ):
             logits = model(input_ids)
             loss = loss_fn(logits, targets)
             fabric.backward(loss / gradient_accumulation_iters)
@@ -117,7 +118,7 @@ def train(
             optimizer.step()
             optimizer.zero_grad()
             step_count += 1
-                
+
             if step_count % eval_interval == 0:
                 val_loss = validate(fabric, model, val_data, tokenizer_path)
                 fabric.print(f"step {iter_num}: val loss {val_loss:.4f}")
@@ -128,11 +129,15 @@ def train(
                 # We are only saving the LoRA weights
                 # TODO: Provide a function/script to merge the LoRA weights with pretrained weights
                 checkpoint = lora_state_dict(model)
-                fabric.save(os.path.join(out_dir, f"iter-{iter_num:06d}-ckpt.pth"), checkpoint)
+                fabric.save(
+                    os.path.join(out_dir, f"iter-{iter_num:06d}-ckpt.pth"), checkpoint
+                )
 
         dt = time.time() - t0
         if iter_num % log_interval == 0:
-            fabric.print(f"iter {iter_num}: loss {loss.item():.4f}, time: {dt*1000:.2f}ms")
+            fabric.print(
+                f"iter {iter_num}: loss {loss.item():.4f}, time: {dt*1000:.2f}ms"
+            )
 
 
 def generate_response(model, instruction, tokenizer_path):
@@ -150,11 +155,13 @@ def generate_response(model, instruction, tokenizer_path):
         max_new_tokens=100,
     )
     output = tokenizer.decode(output)
-    return output # output.split("### Response:")[1].strip()
+    return output  # output.split("### Response:")[1].strip()
 
 
 @torch.no_grad()
-def validate(fabric: L.Fabric, model: torch.nn.Module, val_data: np.ndarray, tokenizer_path: str) -> torch.Tensor:
+def validate(
+    fabric: L.Fabric, model: torch.nn.Module, val_data: np.ndarray, tokenizer_path: str
+) -> torch.Tensor:
     fabric.print("Validating ...")
     model.eval()
     losses = torch.zeros(eval_iters)
@@ -168,13 +175,16 @@ def validate(fabric: L.Fabric, model: torch.nn.Module, val_data: np.ndarray, tok
     model.train()
     return out.item()
 
+
 def loss_fn(logits, targets):
     # shift the targets such that output n predicts token n+1
     logits = logits[..., :-1, :].contiguous()
     targets = targets[..., 1:].contiguous()
-    loss = torch.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+    loss = torch.nn.functional.cross_entropy(
+        logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+    )
     return loss
-    
+
 
 def get_batch(fabric: L.Fabric, data: list):
     ix = torch.randint(len(data), (micro_batch_size,))
@@ -204,8 +214,4 @@ def load_datasets(data_dir):
 if __name__ == "__main__":
     # Uncomment this line if you see an error: "Expected is_sm80 to be true, but got false"
     # torch.backends.cuda.enable_flash_sdp(False)
-    torch.set_float32_matmul_precision("high")
-    
-    from jsonargparse.cli import CLI
-
-    CLI(main)
+    main()
